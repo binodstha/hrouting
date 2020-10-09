@@ -2,8 +2,7 @@
 <html>
 
 <head>
-
-  <title>Quick Start - Leaflet</title>
+  <title>Distance</title>
 
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,17 +15,48 @@
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
     integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
     crossorigin=""></script>
+  <style>
+    body {
+      margin: 0px;
+    }
 
+    #mapid {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      overflow: hidden;
+    }
 
-
+    .right-section {
+      position: absolute;
+      top: 40px;
+      right: 0;
+      z-index: 999;
+      background: #fff;
+      width: 164px;
+      padding: 10px;
+    }
+  </style>
 </head>
 
-<body style="margin: 0;">
+<body>
 
 
 
-  <div id="mapid" style="width: 100%; height: 80%; position: absolute; overflow: hidden; "></div>
-  <button onclick="buttonClick();" style="position: absolute; bottom: 20px;">Find Path</button>
+  <div id="mapid"></div>
+  <div class="right-section">
+    <div>
+      Select Type
+      <select id="ddlViewBy" onchange="dropDownChange();">
+        <option value="path">Path</option>
+        <option value="matrix">Matrix</option>
+      </select>
+    </div>
+    <div id="detail"></div>
+    <button onclick="buttonClick();">Find Path</button>
+    <button onclick="cleardata();">Clear</button>
+  </div>
+
   <script>
 
     var mymap = L.map('mapid').setView([27.705965188185843, 85.31947687268259], 13);
@@ -58,70 +88,144 @@
 
 
     var popup = L.popup();
+    var selectedDd = "path";
+
+    function dropDownChange() {
+      selectedDd = document.getElementById("ddlViewBy").value;
+    }
 
 
-    var point1 = "";
-    var point2 = "";
+    var source = "";
+    var target = "";
     var pt1, pt2, path;
 
+    var matPoint = [];
+
     function onMapClick(e) {
-      console.log(e.latlng);
-      if (point1 === "") {
-        point1 = e.latlng.lng + "," + e.latlng.lat
+      if (source === "") {
+        source = e.latlng.lng + "," + e.latlng.lat
         pt1 = L.marker([e.latlng.lat, e.latlng.lng]);
         pt1.addTo(mymap);
-      } else if (point2 === "") {
-        point2 = e.latlng.lng + "," + e.latlng.lat
+      } else if (selectedDd === "matrix") {
+        let vr = Object.create({});
+        vr.target = e.latlng.lng + "," + e.latlng.lat
+        vr.pt = L.marker([e.latlng.lat, e.latlng.lng]).on('click', function(e){
+
+
+
+        let url = 'https://api.openrouteservice.org/v2/directions/driving-car?api_key=5b3ce3597851110001cf62481ff839df47c04d04acff2795b77f43b7&start=' + source + '&end=' + e.latlng.lng + "," +e.latlng.lat;
+        if (mymap.hasLayer(path)) {
+          mymap.removeLayer(path);
+        }
+        let request = new XMLHttpRequest();
+        request.open('GET', url);
+        request.setRequestHeader('Accept', 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8');
+        request.onreadystatechange = function () {
+          if (this.readyState === 4) {
+            if (this.status !== 400) {
+              let response = JSON.parse(this.responseText);
+              document.getElementById("detail").innerHTML = "Distance: " + response.features[0].properties.summary.distance / 1000 + " km";
+              path = L.geoJSON(response, {
+                style: function (feature) {
+                  return { color: "#000" };
+                }
+              });
+              path.addTo(mymap);
+            }
+          }
+        };
+        request.send();
+        });
+        vr.pt.addTo(mymap);
+        matPoint.push(vr);
+      } else if (target === "") {
+        target = e.latlng.lng + "," + e.latlng.lat
         pt2 = L.marker([e.latlng.lat, e.latlng.lng]);
         pt2.addTo(mymap);
       }
     }
-
-
     mymap.on('click', onMapClick);
 
-
     function buttonClick() {
-      console.log(point1);
-      console.log(point2);
-      console.log("button click")
-
-      var request = new XMLHttpRequest();
-      var url = 'https://api.openrouteservice.org/v2/directions/driving-car?api_key=5b3ce3597851110001cf62481ff839df47c04d04acff2795b77f43b7&start=' + point1 + '&end=' + point2;
-      if (mymap.hasLayer(path)){
-      mymap.removeLayer(path);
-      }
-      request.open('GET', url);
-
-      request.setRequestHeader('Accept', 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8');
-
-      request.onreadystatechange = function () {
-        if (this.readyState === 4) {
-          console.log('Status:', this.status);
-          console.log('Headers:', this.getAllResponseHeaders());
-          console.log(JSON.parse(this.responseText));
-
-          path = L.geoJSON(JSON.parse(this.responseText), {
-            style: function (feature) {
-              return { color: "#000" };
-            }
-          });
-          path.addTo(mymap);
-
-          point1="";
-          point2="";
+      let request = new XMLHttpRequest();
+      if (selectedDd === "path") {
+        let url = 'https://api.openrouteservice.org/v2/directions/driving-car?api_key=5b3ce3597851110001cf62481ff839df47c04d04acff2795b77f43b7&start=' + source + '&end=' + target;
+        if (mymap.hasLayer(path)) {
+          mymap.removeLayer(path);
         }
-      };
+        request.open('GET', url);
+        request.setRequestHeader('Accept', 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8');
+        request.onreadystatechange = function () {
+          if (this.readyState === 4) {
+            if (this.status !== 400) {
+              let response = JSON.parse(this.responseText);
+              document.getElementById("detail").innerHTML = "Distance: " + response.features[0].properties.summary.distance / 1000 + " km";
+              path = L.geoJSON(response, {
+                style: function (feature) {
+                  return { color: "#000" };
+                }
+              });
+              path.addTo(mymap);
+            }
+          }
+        };
+        request.send();
+      } else if (selectedDd === "matrix") {
 
-      request.send();
-      mymap.removeLayer(pt1);
-          mymap.removeLayer(pt2);
+        request.open('POST', "https://api.openrouteservice.org/v2/matrix/driving-car");
+
+        request.setRequestHeader('Accept', 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8');
+        request.setRequestHeader('Content-Type', 'application/json');
+        request.setRequestHeader('Authorization', '5b3ce3597851110001cf62481ff839df47c04d04acff2795b77f43b7');
+
+        request.onreadystatechange = function () {
+          if (this.readyState === 4) {
+            if (this.status !== 400) {
+              let response = JSON.parse(this.responseText);
+              let distText = ""
+              let dist = response.distances[0]
+              dist.forEach((d, i) => {
+                distText = distText + '<br>' + i + " position : " + d + "km";
+              })
+              document.getElementById("detail").innerHTML = distText;
+            }
+          }
+        };
+        let bodyParam = "[" + source + "]";
+
+        matPoint.forEach(mp => {
+          bodyParam = bodyParam + ",[" + mp.target + "]";
+        });
+        const body = '{"locations":[' + bodyParam + '],"metrics":["distance"],"resolve_locations":"true","units":"km"}';
+
+        request.send(body);
+      }
+
 
     }
+
+    function cleardata() {
+      if (mymap.hasLayer(path)) {
+        mymap.removeLayer(path);
+      }
+      if (mymap.hasLayer(pt1)) {
+        mymap.removeLayer(pt1);
+      }
+      if (mymap.hasLayer(pt2)) {
+        mymap.removeLayer(pt2);
+      }
+
+      matPoint.forEach(mp => {
+        if (mymap.hasLayer(mp.pt)) {
+          mymap.removeLayer(mp.pt);
+        }
+      })
+      document.getElementById("detail").innerHTML = "";
+      source = "";
+      target = "";
+      matPoint = [];
+    }
   </script>
-
-
-
 </body>
 
 </html>
